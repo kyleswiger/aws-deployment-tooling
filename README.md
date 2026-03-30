@@ -1,10 +1,10 @@
-# AWS Gemini CLI Tooling
+# AWS Deployment Tooling
 
-A collection of generic, reusable tools, skills, and infrastructure modules for building and maintaining AWS-based applications with the Gemini CLI.
+A collection of generic, reusable tools, skills, and infrastructure modules for building and maintaining AWS-based applications with the development.
 
 ## Repository Structure
 
-- `skills/`: Custom Gemini CLI skills (e.g., skill-creator).
+- `skills/`: Custom development skills (e.g., skill-creator).
 - `terraform-modules/`: Reusable Terraform modules for common AWS serverless patterns.
 - `templates/`: CI/CD (buildspec.yml), Docker, and API boilerplate.
 - `scripts/`: Automation scripts for environment setup and deployment.

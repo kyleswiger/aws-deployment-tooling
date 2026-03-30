@@ -1,11 +1,14 @@
-# Sportscard Intelligence - Tools Repository
+# AWS Gemini CLI Tooling
 
-This repository contains custom tools, scripts, and Gemini CLI skills to automate the development and maintenance of the Sportscard Intelligence Platform.
+A collection of generic, reusable tools, skills, and infrastructure modules for building and maintaining AWS-based applications with the Gemini CLI.
 
-## Current Tools
-- **Skill Creator**: A guide and template system for creating new Gemini CLI skills.
+## Repository Structure
 
-## Future Tools
-- Batch image processing scripts.
-- Data validation utilities.
-- Deployment helper scripts.
+- `skills/`: Custom Gemini CLI skills (e.g., skill-creator).
+- `terraform-modules/`: Reusable Terraform modules for common AWS serverless patterns.
+- `templates/`: CI/CD (buildspec.yml), Docker, and API boilerplate.
+- `scripts/`: Automation scripts for environment setup and deployment.
+
+## Usage
+
+This repository is designed to be a standalone toolkit. You can clone it or use it as a reference for your own AWS projects.

@@ -33,12 +33,20 @@ scripts/             automation
   detect-changes.sh     emit BUILD_* flags for change-aware CI
   run-ci.sh             per-phase CodeBuild orchestrator
 
+examples/            complete, wired-together reference stacks
+  lightweight-zip-stack/   SPA + Cognito + zip Lambda, profile-driven deploy.sh
+  container-cicd-stack/    SPA + Cognito + container Lambda + GitHub OIDC CI
+
 docs/                the methodology, in prose
   methodology.md · remote-state.md · github-oidc.md
   change-aware-ci.md · ephemeral-previews.md
 
 skills/              custom development skills (skill-creator)
 ```
+
+New to the modules? The [`examples/`](examples) directory has two runnable roots
+that wire everything together — `terraform init && terraform plan` against your
+own account to see the whole stack before adopting a piece of it.
 
 ## The architecture in one picture
 

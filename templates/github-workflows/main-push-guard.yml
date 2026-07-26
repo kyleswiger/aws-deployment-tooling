@@ -1,0 +1,76 @@
+# Soft guard for repositories that cannot take a branch ruleset — private repos
+# on the GitHub free plan, where both rulesets and classic branch protection
+# return 403.
+#
+# This CANNOT prevent a direct push to the default branch. It detects one after
+# the fact, fails the run, and opens an issue. Delete this workflow once the repo
+# is covered by scripts/apply-branch-ruleset.sh, which enforces the same rule for
+# real.
+name: Main Push Guard
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Detect commits that did not arrive via a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
+        run: |
+          set -euo pipefail
+
+          # Ask GitHub which PRs each pushed commit belongs to. A commit with no
+          # associated PR reached the default branch some other way.
+          orphans=()
+          for sha in $(jq -r '.commits[].id' "$GITHUB_EVENT_PATH"); do
+            count="$(gh api "repos/${REPO}/commits/${sha}/pulls" \
+              -H "Accept: application/vnd.github.groot-preview+json" \
+              --jq 'length')"
+            if [[ "$count" == "0" ]]; then
+              orphans+=("$sha")
+            fi
+          done
+
+          if [[ ${#orphans[@]} -eq 0 ]]; then
+            echo "All pushed commits are associated with a pull request."
+            exit 0
+          fi
+
+          {
+            echo "## Direct push to \`main\` detected"
+            echo
+            echo "These commits reached \`main\` without an associated pull request,"
+            echo "bypassing the Claude and Gemini review gates:"
+            echo
+            for sha in "${orphans[@]}"; do
+              echo "- ${sha}"
+            done
+            echo
+            echo "Range: \`${BEFORE}\` → \`${AFTER}\`"
+          } > body.md
+
+          cat body.md >> "$GITHUB_STEP_SUMMARY"
+
+          gh issue create \
+            --repo "$REPO" \
+            --title "Direct push to main detected (${AFTER:0:7})" \
+            --body-file body.md \
+            --label "branch-protection" || \
+            gh issue create \
+              --repo "$REPO" \
+              --title "Direct push to main detected (${AFTER:0:7})" \
+              --body-file body.md
+
+          echo "::error::${#orphans[@]} commit(s) pushed to main outside a pull request."
+          exit 1

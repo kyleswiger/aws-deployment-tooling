@@ -84,7 +84,15 @@ free plan, and classic branch protection is gated the same way. The script
 detects this and reports the repo as SKIPPED rather than failing the whole run.
 
 Until those repos are public or the account is on Pro, the fallback is a soft
-guard — a `CODEOWNERS` file plus a workflow that flags commits pushed to the
-default branch outside a PR. It makes a violation visible after the fact; it
-cannot prevent one. Re-run this script against those repos the moment the plan
-changes; no edits to the JSON are needed.
+guard: [`templates/github-workflows/main-push-guard.yml`](../templates/github-workflows/main-push-guard.yml),
+which runs on every push to `main`, asks GitHub whether each pushed commit has an
+associated PR, and opens an issue plus fails the run when one does not. It makes
+a violation visible after the fact; it cannot prevent one.
+
+Pair it with a `.github/CODEOWNERS` file. Be aware that code owners is itself a
+paid feature on private repos — on the free plan the file is inert and only
+starts doing anything once the account is on Pro. It is worth committing now so
+the repo is ready, but the workflow is what actually provides coverage today.
+
+Once the plan changes, run `apply-branch-ruleset.sh` against those repos and
+delete the guard workflow. No edits to the ruleset JSON are needed.

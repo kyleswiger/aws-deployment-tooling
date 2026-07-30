@@ -1,0 +1,106 @@
+# Soft guard for repositories that cannot take a branch ruleset — private repos
+# on the GitHub free plan, where both rulesets and classic branch protection
+# return 403.
+#
+# This CANNOT prevent a direct push to the default branch. It detects one after
+# the fact, fails the run, and opens an issue. Delete this workflow once the repo
+# is covered by scripts/apply-branch-ruleset.sh, which enforces the same rule for
+# real.
+name: Main Push Guard
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Detect changes that did not arrive via a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
+          FORCED: ${{ github.event.forced }}
+        run: |
+          set -euo pipefail
+
+          forced_note=""
+          if [[ "$FORCED" == "true" ]]; then
+            # A forced push rewrites history. Rewinding main to an ancestor produces an
+            # empty `commits` array, so the per-commit check below would find nothing to
+            # object to and report a clean bill of health for exactly the kind of bypass
+            # this guard exists to catch. The force-push is the finding.
+            forced_note="\`main\` was **force-pushed**. History was rewritten, so commits may have been removed from the branch without appearing in any list below."
+            echo "::warning::main was force-pushed (${BEFORE} -> ${AFTER})."
+          fi
+
+          # The push payload caps `commits` at 20, so ask the compare API for the real
+          # range instead. On a forced push `before` is usually not an ancestor of
+          # `after` and compare can 404 — fall back to the payload, which the force-push
+          # check above already treats as untrustworthy on its own.
+          if ! shas="$(gh api "repos/${REPO}/compare/${BEFORE}...${AFTER}" --jq '.commits[].sha' 2>/dev/null)"; then
+            shas="$(jq -r '.commits[].id' "$GITHUB_EVENT_PATH")"
+          fi
+
+          # Ask GitHub which PRs each pushed commit belongs to. A commit with no
+          # associated PR reached the default branch some other way.
+          orphans=()
+          for sha in $shas; do
+            count="$(gh api "repos/${REPO}/commits/${sha}/pulls" \
+              -H "Accept: application/vnd.github.groot-preview+json" \
+              --jq 'length')"
+            if [[ "$count" == "0" ]]; then
+              orphans+=("$sha")
+            fi
+          done
+
+          if [[ ${#orphans[@]} -eq 0 && -z "$forced_note" ]]; then
+            echo "All pushed commits are associated with a pull request."
+            exit 0
+          fi
+
+          {
+            echo "## Direct push to \`main\` detected"
+            echo
+            if [[ -n "$forced_note" ]]; then
+              echo "$forced_note"
+              echo
+            fi
+            if [[ ${#orphans[@]} -gt 0 ]]; then
+              echo "These commits reached \`main\` without an associated pull request,"
+              echo "bypassing the Claude and Gemini review gates:"
+              echo
+              for sha in "${orphans[@]}"; do
+                echo "- ${sha}"
+              done
+              echo
+            fi
+            echo "Range: \`${BEFORE}\` → \`${AFTER}\`"
+          } > body.md
+
+          cat body.md >> "$GITHUB_STEP_SUMMARY"
+
+          gh issue create \
+            --repo "$REPO" \
+            --title "Direct push to main detected (${AFTER:0:7})" \
+            --body-file body.md \
+            --label "branch-protection" || \
+            gh issue create \
+              --repo "$REPO" \
+              --title "Direct push to main detected (${AFTER:0:7})" \
+              --body-file body.md
+
+          if [[ -n "$forced_note" ]]; then
+            echo "::error::main was force-pushed, bypassing the pull request gate."
+          fi
+          if [[ ${#orphans[@]} -gt 0 ]]; then
+            echo "::error::${#orphans[@]} commit(s) pushed to main outside a pull request."
+          fi
+          exit 1

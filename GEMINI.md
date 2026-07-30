@@ -1,6 +1,6 @@
-# CLAUDE.md
+# GEMINI.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Gemini (and Antigravity) when working with code in this repository.
 
 ## What this repo is
 A **toolkit, not an application**. Nothing here is deployed from this repo — the Terraform modules, scripts, and examples are copied or sourced into other projects. Files carry `<PLACEHOLDER>` tokens and `ADAPT:` comments marking where a consuming project fills in its own names. 

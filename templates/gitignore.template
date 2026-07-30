@@ -1,0 +1,63 @@
+# Baseline .gitignore for an AWS project built with this toolkit.
+# Copy to your project root as `.gitignore` and prune sections you don't use.
+
+# --- Node ---
+node_modules/
+npm-debug.log
+yarn-error.log
+dist/
+.env
+.env.*
+!.env.example
+
+# --- Python ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+.pytest_cache/
+
+# --- Terraform ---
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+!**/prod.tfvars          # commit prod.tfvars if it holds no secrets (see note)
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+
+# Generated from the active deployment profile by deploy.sh (profile pattern).
+infra/backend.tf
+
+# Deployment profiles hold real domains, account-specific values, and state.
+# Only the example profile ships. (profile pattern — see scripts/deploy.sh)
+profile*/
+!profile.example/
+profile.example/terraform.tfstate*
+
+# --- Build artifacts ---
+*.zip
+change-flags.env
+reports/
+
+# --- Playwright ---
+**/test-results/
+**/playwright-report/
+**/blob-report/
+.playwright-mcp/
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# NOTE on prod.tfvars: keep secrets OUT of it (use SSM Parameter Store / env
+# vars). Only whitelist it above (!**/prod.tfvars) if it is genuinely
+# non-sensitive project config.

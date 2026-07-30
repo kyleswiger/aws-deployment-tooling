@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars and edit.
+
+name_prefix      = "myapp"
+app_display_name = "My App"
+
+# owner/repo that GitHub Actions deploys from — this is the OIDC trust subject.
+github_repo = "kyleswiger/myapp"
+
+# --- Custom domain (optional) ---
+# custom_domain  = "app.example.com"
+# hosted_zone_id = "Z0123456789ABCDEF"
+
+# Local dev server origin allowed through CORS.
+local_dev_origin = "http://localhost:5173"

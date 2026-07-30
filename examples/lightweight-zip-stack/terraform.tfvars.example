@@ -1,0 +1,21 @@
+# Copy to terraform.tfvars and edit. All values have defaults except where you
+# want a custom domain (then custom_domain + hosted_zone_id are both required).
+
+name_prefix      = "myapp"
+app_display_name = "My App"
+
+# --- Custom domain (optional) ---
+# Leave both empty to serve from the generated *.cloudfront.net domain.
+# custom_domain  = "app.example.com"
+# hosted_zone_id = "Z0123456789ABCDEF"
+
+# --- Backend ---
+# Defaults to the bundled ./placeholder/api.zip so `terraform plan` works out of
+# the box. Point at your real build once you have one; scripts/deploy.sh rebuilds
+# the package before each apply. Terraform hashes this file at plan time, so it
+# must exist.
+# api_zip_path = "../../backend/dist/api.zip"
+api_runtime = "nodejs22.x"
+
+# Local dev server origin allowed through CORS.
+local_dev_origin = "http://localhost:5173"

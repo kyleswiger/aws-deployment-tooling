@@ -1,0 +1,93 @@
+version: 0.2
+
+# Change-aware CI/CD build for a CodePipeline + CodeBuild app pipeline.
+#
+# Design goals:
+#   1. Only build/push/deploy what actually changed (scripts/detect-changes.sh).
+#   2. Tag images with the commit SHA (immutable) and also move :latest and
+#      :cache tags so ECR layer caching + rollback both work.
+#   3. Every skipped stage prints why, so build logs stay auditable.
+#   4. Keep CodeBuild warm-cache friendly (pip/npm paths under `cache.paths`).
+#
+# All real logic lives in scripts/* so it can be unit-tested and reused from
+# GitHub Actions. Copy scripts/detect-changes.sh and scripts/run-ci.sh from this
+# toolkit into your project's scripts/ and adapt the component globs + build
+# steps to your repo layout.
+#
+# The CodeBuild project must set these environment variables (see the
+# aws_codebuild_project resource — e.g. the `codepipeline.tf` you keep in-repo):
+#   ECR_API_REPOSITORY_URL, ECR_VISION_REPOSITORY_URL (or your own components)
+#   UI_BUCKET_NAME, CLOUDFRONT_DISTRIBUTION_ID
+#   API_LAMBDA_NAME, VISION_LAMBDA_NAME
+#   RUN_TERRAFORM_APPLY ("true"/"false")
+
+env:
+  # Required when the pipeline source uses OutputArtifactFormat CODEBUILD_CLONE_REF
+  # so git fetch/clone against the CodeStar connection works from the build script.
+  git-credential-helper: yes
+  variables:
+    RUN_PLAYWRIGHT_E2E: "false"
+    DOCKER_BUILDKIT: "1"
+    COMPOSE_DOCKER_CLI_BUILD: "1"
+    PIP_DISABLE_PIP_VERSION_CHECK: "1"
+    PIP_NO_INPUT: "1"
+    # Path must contain a slash so `source` skips PATH search (CodeBuild's
+    # non-interactive shell won't fall back to CWD for bare filenames).
+    CHANGE_FLAGS_FILE: "./change-flags.env"
+  exported-variables:
+    - IMAGE_TAG
+    - ANY_CODE_CHANGED
+    - BUILD_UI
+    - BUILD_API
+    - BUILD_VISION
+    - BUILD_TERRAFORM
+
+phases:
+  install:
+    commands:
+      - chmod +x scripts/*.sh
+      - bash scripts/detect-changes.sh
+      - set -a && source "$CHANGE_FLAGS_FILE" && set +a
+      - export IMAGE_TAG="${CODEBUILD_RESOLVED_SOURCE_VERSION:-$(date +%Y%m%d%H%M%S)}"
+      - echo "IMAGE_TAG=$IMAGE_TAG"
+      - bash scripts/run-ci.sh install
+
+  pre_build:
+    commands:
+      - set -a && source "$CHANGE_FLAGS_FILE" && set +a
+      - bash scripts/run-ci.sh prebuild
+
+  build:
+    commands:
+      - set -a && source "$CHANGE_FLAGS_FILE" && set +a
+      - bash scripts/run-ci.sh build
+
+  post_build:
+    commands:
+      - set -a && source "$CHANGE_FLAGS_FILE" && set +a
+      - bash scripts/run-ci.sh postbuild
+      - echo "Build completed on $(date -u +%FT%TZ) sha=$IMAGE_TAG"
+
+cache:
+  paths:
+    # Caching the npm download cache (~/.npm) and re-running `npm ci
+    # --prefer-offline` is far cheaper than caching node_modules itself.
+    - '/root/.npm/**/*'
+    - '/root/.cache/pip/**/*'
+    - '/root/.cache/pre-commit/**/*'
+
+# Keep artifacts tiny — only ship the UI bundle and the change-flags manifest
+# that downstream stages consume, not node_modules/.git/dist.
+artifacts:
+  base-directory: .
+  discard-paths: no
+  files:
+    - 'ui/dist/**/*'
+    - 'change-flags.env'
+
+reports:
+  pytest_reports:
+    files:
+      - 'reports/pytest/*.xml'
+    file-format: JUNITXML
+    base-directory: .

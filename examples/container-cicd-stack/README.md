@@ -68,7 +68,7 @@ changes.
 ## Wire up CI
 
 1. Copy the workflow templates you need from
-   [`templates/github-workflows`](../../templates/github-workflows) into your
+   the GitHub Actions from `kyleswiger/aws-reusable-workflows` into your
    app repo's `.github/workflows/` and replace the `<PLACEHOLDER>` tokens
    (`<NAME_PREFIX>`, `<API_REPO>`, `<DEV_API_URL>`, `<DEV_UI_BUCKET>`,
    `<PREVIEW_DOMAIN>`) with this stack's outputs.

@@ -22,7 +22,7 @@ terraform-modules/   reusable, parameterized Terraform modules
 
 templates/           copy-paste-and-fill CI/CD boilerplate
   buildspec/            CodeBuild buildspecs (app + runner image)
-  github-workflows/     pr-preview, pr-cleanup, deploy-dev-api
+  github-workflows/     (Moved to kyleswiger/aws-reusable-workflows)
   docker/               CodeBuild runner + Python Lambda Dockerfiles
   gitignore.template    baseline .gitignore
 

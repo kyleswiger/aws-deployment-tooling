@@ -8,7 +8,8 @@
 #
 # Adjust src/api paths to your repo layout. `src/shared` holds code shared across
 # multiple Lambdas; drop that COPY if you don't have one.
-ARG LAMBDA_PY_DIGEST=sha256:0000000000000000000000000000000000000000000000000000000000000000
+# ADAPT: Replace this placeholder digest with a real sha256 for public.ecr.aws/lambda/python:3.12
+ARG LAMBDA_PY_DIGEST=<PLACEHOLDER_DIGEST>
 FROM public.ecr.aws/lambda/python:3.12@${LAMBDA_PY_DIGEST}
 
 COPY src/api/requirements.txt .

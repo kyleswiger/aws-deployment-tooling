@@ -25,7 +25,8 @@ build/
 *.tfstate.*
 *.tfvars
 *.tfvars.json
-!**/prod.tfvars          # commit prod.tfvars if it holds no secrets (see note)
+# commit prod.tfvars if it holds no secrets (see note)
+!**/prod.tfvars
 *.tfplan
 crash.log
 override.tf

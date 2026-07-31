@@ -19,11 +19,11 @@ only the frontend is cheap and catches the vast majority of review-worthy change
 
 - **Shared dev backend** — a persistent Terraform `dev` workspace/stack (API
   Lambda, data store, CloudFront router at `api.dev.example.com`).
-- **Per-PR frontend** — [`pr-preview.yml`](../templates/github-workflows/pr-preview.yml)
+- **Per-PR frontend** — `pr-preview.yml` (from `kyleswiger/aws-reusable-workflows`)
   uploads the branch build to a per-branch S3 prefix on every push.
 - **Routing** — a CloudFront function maps `<safe-branch>.dev.example.com` to the
   matching S3 prefix. (Keep this function in your app repo; it's project-specific.)
-- **Cleanup** — [`pr-cleanup.yml`](../templates/github-workflows/pr-cleanup.yml)
+- **Cleanup** — `pr-cleanup.yml` (from `kyleswiger/aws-reusable-workflows`)
   deletes the prefix when the PR closes.
 
 ## The three workflows

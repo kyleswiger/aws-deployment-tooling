@@ -84,7 +84,7 @@ free plan, and classic branch protection is gated the same way. The script
 detects this and reports the repo as SKIPPED rather than failing the whole run.
 
 Until those repos are public or the account is on Pro, the fallback is a soft
-guard: [`templates/github-workflows/main-push-guard.yml`](../templates/github-workflows/main-push-guard.yml),
+guard: `main-push-guard.yml` (from `kyleswiger/aws-reusable-workflows`),
 which runs on every push to `main`, asks GitHub whether each pushed commit has an
 associated PR, and opens an issue plus fails the run when one does not. It makes
 a violation visible after the fact; it cannot prevent one.

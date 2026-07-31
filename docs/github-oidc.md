@@ -68,4 +68,4 @@ steps:
   action; the repo-scoped push actions go on the repo ARN.
 
 Consumed by all three workflow templates in
-[`templates/github-workflows`](../templates/github-workflows).
+the `kyleswiger/aws-reusable-workflows` repository.

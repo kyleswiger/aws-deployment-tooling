@@ -15,5 +15,5 @@ output "user_pool_client_id" {
 
 output "issuer" {
   description = "OIDC issuer URL for the pool. API Gateway JWT authorizers and SPA OIDC libraries need this."
-  value       = "https://cognito-idp.${data.aws_region.current.region}.amazonaws.com/${aws_cognito_user_pool.main.id}"
+  value       = "https://cognito-idp.${data.aws_region.current.name}.amazonaws.com/${aws_cognito_user_pool.main.id}"
 }

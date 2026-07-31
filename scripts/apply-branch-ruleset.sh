@@ -56,8 +56,8 @@ for repo in "${REPOS[@]}"; do
       echo "    Make the repo public or upgrade, then re-run this script." >&2
     else
       echo "    FAILED: ${existing}" >&2
+      failed=1
     fi
-    failed=1
     continue
   fi
 

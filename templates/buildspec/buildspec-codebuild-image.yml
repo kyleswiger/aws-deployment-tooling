@@ -1,0 +1,24 @@
+# Builds and pushes the custom CodeBuild runner image. Run via a dedicated
+# CodeBuild project (e.g. "<project>-codebuild-runner-image") — NOT the main app
+# pipeline — so routine app builds stay fast and don't rebuild the toolchain.
+#
+# The project must set RUNNER_IMAGE_REPOSITORY_URL to the ECR repo for the runner
+# image. See templates/docker/codebuild-runner.Dockerfile.
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo "Logging in to Amazon ECR..."
+      - ECR_REGISTRY=$(echo "$RUNNER_IMAGE_REPOSITORY_URL" | cut -d/ -f1)
+      - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+  build:
+    commands:
+      - echo "Building CodeBuild runner image on $(date)"
+      - export IMAGE_URI="${RUNNER_IMAGE_REPOSITORY_URL}:latest"
+      - docker build -t "$IMAGE_URI" -f docker/codebuild-runner/Dockerfile .
+  post_build:
+    commands:
+      - export IMAGE_URI="${RUNNER_IMAGE_REPOSITORY_URL}:latest"
+      - docker push "$IMAGE_URI"
+      - echo "Pushed $IMAGE_URI"

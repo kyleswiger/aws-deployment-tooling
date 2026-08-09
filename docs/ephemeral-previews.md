@@ -1,59 +1,87 @@
 # Ephemeral PR preview environments
 
-Every pull request gets its own frontend preview URL, backed by a single shared
-dev backend. Full-stack isolation per PR would be slow and expensive; isolating
-only the frontend is cheap and catches the vast majority of review-worthy changes.
+Every pull request gets a **real, browsable preview environment**: its own
+frontend URL *and* its own backend Lambda, sharing only the slow/fixed-cost
+infrastructure. The design principle: split every environment into **slow
+infra** (deployed once by Terraform) and **fast code** (deployed per-PR by CI in
+seconds). Per-PR pieces are only things that are free while idle — S3 objects
+and Lambda functions — so previews cost ~$0/month fixed.
 
 ## Architecture
 
 ```
-  PR push ─► GitHub Actions (pr-preview.yml)
-               ├─ lint + build UI (against dev API)
-               ├─ pytest / unit tests
-               ├─ Playwright smoke (+ optional backend e2e)
-               └─ s3 sync ui/dist → s3://<dev-ui-bucket>/<safe-branch>/
+  PR push ─► GitHub Actions (preview-deploy.yml)
+               ├─ build backend → create/update Lambda <prefix>-preview-pr-<N>
+               │    └─ Function URL (per-PR API endpoint, free while idle)
+               ├─ build UI with VITE_API_BASE_URL=<function-url>
+               ├─ s3 sync ui/dist → s3://<preview-bucket>/previews/pr-<N>/
+               ├─ invalidate /previews/pr-<N>/*
+               ├─ comment https://pr-<N>.preview.example.com on the PR
+               └─ Playwright e2e against the live preview URL
 
-  https://<safe-branch>.dev.example.com
-     └─► CloudFront (function maps host → S3 prefix) ─► shared dev backend
+  https://pr-<N>.preview.example.com
+     └─► CloudFront (*.preview.example.com, one distribution)
+           └─ viewer-request function: host → /previews/pr-<N>/ prefix
+                └─► per-PR bundle → per-PR Lambda → shared preview data tier
 ```
 
-- **Shared dev backend** — a persistent Terraform `dev` workspace/stack (API
-  Lambda, data store, CloudFront router at `api.dev.example.com`).
-- **Per-PR frontend** — `pr-preview.yml` (from `kyleswiger/aws-reusable-workflows`)
-  uploads the branch build to a per-branch S3 prefix on every push.
-- **Routing** — a CloudFront function maps `<safe-branch>.dev.example.com` to the
-  matching S3 prefix. (Keep this function in your app repo; it's project-specific.)
-- **Cleanup** — `pr-cleanup.yml` (from `kyleswiger/aws-reusable-workflows`)
-  deletes the prefix when the PR closes.
+## The pieces
 
-## The three workflows
-
-| Workflow | Trigger | Does |
+| Piece | Lives in | Cadence |
 |---|---|---|
-| `pr-preview.yml` | PR opened/synchronized | Full CI gate + deploy branch UI to per-branch prefix, comment the URL. |
-| `pr-cleanup.yml` | PR closed | Delete the branch's S3 prefix. |
-| `deploy-dev-api.yml` | push to `main` (backend paths) or manual | Rebuild + `update-function-code` the shared dev backend Lambda. |
+| `preview-substrate` Terraform module (bucket, wildcard cert, CloudFront + router function, shared Lambda exec role, CI policy statements) | `aws-deployment-tooling/terraform-modules/preview-substrate` | applied once per site |
+| `preview-deploy.yml` / `preview-cleanup.yml` reusable workflows | `kyleswiger/aws-reusable-workflows` | called per PR event |
+| Thin caller workflow + module instantiation | each app repo | one-time wiring |
 
 ## Design choices that matter
 
-- **A dev-backend outage must not red-X unrelated PRs.** The workflow health-checks
-  the dev API and only *then* runs backend-dependent e2e; if it's unreachable, those
-  specs are skipped with a warning, and lint/unit/smoke still gate the PR.
-- **Build the UI once.** The `test` job uploads the built `ui/dist` as an artifact;
-  the `preview` job downloads it instead of re-running `npm ci && npm run build`.
-- **Feature-flag the deploy.** `ENABLE_EPHEMERAL_PREVIEW_DEPLOY` and
-  `PLAYWRIGHT_E2E` repo variables let you land the workflow before the dev backend
-  exists — CI still runs; the deploy no-ops until you flip the flag.
-- **Safe branch names.** Branch names are lowercased and stripped to
-  `[a-z0-9-]`, capped at 63 chars, so they're valid as both a DNS label and an S3
-  prefix.
+- **Host-based routing, not per-PR distributions.** A CloudFront distribution
+  takes minutes to create and update; a `s3 sync` takes seconds. One wildcard
+  distribution + a viewer-request function mapping `pr-<N>.<domain>` onto the
+  `previews/pr-<N>/` prefix means Vite's root-absolute `/assets/…` paths work
+  with no `base` config, and the rewritten URI is the cache key so previews
+  never bleed into each other.
+- **Key previews by PR number, not branch name.** `pr-123` is stable, short,
+  and needs no sanitization; branch names collide after stripping (`docs/x` and
+  `docsx` map to the same label).
+- **Per-PR backend as Lambda + Function URL.** Zero idle cost, creates in
+  seconds, no API Gateway needed. Each PR's UI bundle is built with its own
+  Function URL baked in, so two open PRs never share a backend. CORS is handled
+  in-app with an origin regex (e.g. `https://pr-\d+\.preview\.example\.com`).
+- **A dedicated preview bucket, never the prod UI bucket.** Prod deploys that
+  `s3 sync --delete` against the bucket root would silently wipe previews; a
+  separate bucket also keeps CI's S3 permissions away from prod assets.
+- **Previews run the dev auth mode, against a dev data tier.** Point the
+  preview Lambda at dev data (a dev logical database on an existing instance, a
+  dev DynamoDB table) and enable header/dev auth — this is also exactly what
+  backend-dependent Playwright specs need.
+- **CI never creates IAM.** The substrate module provisions one shared
+  execution role; CI's only IAM permission is `iam:PassRole` on that role, and
+  its Lambda permissions are scoped to `<prefix>-preview-pr-*`.
+- **Belt-and-braces cleanup.** `preview-cleanup.yml` deletes the Lambda and S3
+  prefix on PR close; an S3 lifecycle rule expires `previews/` objects after N
+  days in case cleanup never ran. Orphaned Lambdas cost nothing while idle.
+- **Fail loudly, not silently.** A deploy that couldn't authenticate to AWS
+  must not post a success comment; gate the comment on the sync step actually
+  running.
+
+## End-to-end testing
+
+After the preview deploys, the workflow runs Playwright with
+`PLAYWRIGHT_BASE_URL=https://pr-<N>.preview.example.com` — real CDN, real
+Lambda, real data tier. Because each PR has its own backend, parallel PRs don't
+stomp each other's state; specs that need auth use the dev auth mode the
+preview backend runs with.
 
 ## One-time setup checklist
 
-1. Deploy the shared dev backend (its own Terraform stack/workspace).
-2. Create the dev UI bucket + the CloudFront host→prefix routing function.
-3. Create the `github-oidc-role` and save its ARN as `AWS_GITHUB_ACTIONS_ROLE_ARN`.
-4. Set repo variables `ENABLE_EPHEMERAL_PREVIEW_DEPLOY=true` and (optionally)
-   `PLAYWRIGHT_E2E=true`.
-5. Replace the `<DEV_API_URL>`, `<DEV_UI_BUCKET>`, `<PREVIEW_DOMAIN>`,
-   `<NAME_PREFIX>`, `<API_REPO>` placeholders in the workflow templates.
+1. Apply `preview-substrate` in the site's Terraform (choose `preview_domain`,
+   pass data-tier statements for the preview Lambda role).
+2. Feed `module.preview.ci_policy_statements` into the site's
+   `github-oidc-role`; save the role ARN as the `AWS_GITHUB_ACTIONS_ROLE_ARN`
+   repo secret.
+3. Add thin caller workflows for `preview-deploy.yml` (on
+   `pull_request: [opened, synchronize, reopened]`) and `preview-cleanup.yml`
+   (on `pull_request: [closed]`) from `kyleswiger/aws-reusable-workflows`.
+4. Ensure the backend honors the preview env vars the caller passes (dev auth
+   mode, dev data tier, CORS origin regex).

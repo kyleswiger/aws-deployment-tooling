@@ -47,6 +47,9 @@ output "ci_policy_statements" {
         "s3:GetObject",
         "s3:DeleteObject",
         "s3:ListBucket",
+        # aws s3 sync/cp switch to multipart for large files; aborting a failed
+        # upload needs this beyond s3:PutObject.
+        "s3:AbortMultipartUpload",
       ]
       resources = [
         aws_s3_bucket.previews.arn,

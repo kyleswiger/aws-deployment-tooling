@@ -41,18 +41,22 @@ resource "aws_s3_bucket_public_access_block" "previews" {
   restrict_public_buckets = true
 }
 
+# The abort-incomplete-uploads backstop must exist regardless of the expiry
+# toggle, so only the expire rule is conditional — not the whole resource.
 resource "aws_s3_bucket_lifecycle_configuration" "previews" {
-  count  = var.expire_previews_after_days > 0 ? 1 : 0
   bucket = aws_s3_bucket.previews.id
 
-  rule {
-    id     = "expire-stale-previews"
-    status = "Enabled"
-    filter {
-      prefix = "previews/"
-    }
-    expiration {
-      days = var.expire_previews_after_days
+  dynamic "rule" {
+    for_each = var.expire_previews_after_days > 0 ? [1] : []
+    content {
+      id     = "expire-stale-previews"
+      status = "Enabled"
+      filter {
+        prefix = "previews/"
+      }
+      expiration {
+        days = var.expire_previews_after_days
+      }
     }
   }
 
@@ -64,6 +68,12 @@ resource "aws_s3_bucket_lifecycle_configuration" "previews" {
       days_after_initiation = 3
     }
   }
+}
+
+# The lifecycle configuration used to be count-gated on the expiry toggle.
+moved {
+  from = aws_s3_bucket_lifecycle_configuration.previews[0]
+  to   = aws_s3_bucket_lifecycle_configuration.previews
 }
 
 # --------------------------------------------------------------------------- #
@@ -112,11 +122,12 @@ data "aws_cloudfront_cache_policy" "caching_optimized" {
 }
 
 resource "aws_cloudfront_distribution" "previews" {
-  enabled     = true
-  price_class = var.price_class
-  aliases     = [local.wildcard_domain]
-  comment     = "${var.name_prefix} PR previews"
-  tags        = var.tags
+  enabled         = true
+  is_ipv6_enabled = true
+  price_class     = var.price_class
+  aliases         = [local.wildcard_domain]
+  comment         = "${var.name_prefix} PR previews"
+  tags            = var.tags
 
   origin {
     domain_name              = aws_s3_bucket.previews.bucket_regional_domain_name
@@ -222,6 +233,9 @@ resource "aws_route53_record" "cert_validation" {
   type    = each.value.type
   ttl     = 300
   records = [each.value.record]
+  # The cert uses create_before_destroy; renewal issues a replacement cert
+  # whose validation record has the same name, so the write must overwrite.
+  allow_overwrite = true
 }
 
 resource "aws_acm_certificate_validation" "previews" {
@@ -230,14 +244,21 @@ resource "aws_acm_certificate_validation" "previews" {
 }
 
 resource "aws_route53_record" "previews" {
-  zone_id = var.hosted_zone_id
-  name    = local.wildcard_domain
-  type    = "A"
+  for_each = toset(["A", "AAAA"])
+  zone_id  = var.hosted_zone_id
+  name     = local.wildcard_domain
+  type     = each.value
   alias {
     name                   = aws_cloudfront_distribution.previews.domain_name
     zone_id                = aws_cloudfront_distribution.previews.hosted_zone_id
     evaluate_target_health = false
   }
+}
+
+# The wildcard alias used to be a single un-keyed A record.
+moved {
+  from = aws_route53_record.previews
+  to   = aws_route53_record.previews["A"]
 }
 
 # --------------------------------------------------------------------------- #

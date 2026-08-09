@@ -17,6 +17,33 @@ The script matches an existing ruleset by name and updates it in place, so it is
 safe to re-run — that is also how you roll a change to the JSON out to every
 repo at once.
 
+## Where it is applied
+
+Seven repos are in scope for the agentic review gates. `kyleswiger` is a user
+account, not an org, so there are no org-level rulesets or shared secrets —
+every row below is configured per repo.
+
+| Repo | Visibility | Claude | Gemini | Ruleset | Guard fallback |
+| --- | --- | --- | --- | --- | --- |
+| `aws-deployment-tooling` | public | yes | yes | applied | n/a |
+| `cabin-management` | public | yes | yes | **not applied** | n/a |
+| `gemini-pr-reviewer` | public | yes | yes | **not applied** | n/a |
+| `cicd-automation` | private | yes | yes | 403 (needs Pro) | **missing** |
+| `jackscabin-mgmt` | private | yes | yes | 403 (needs Pro) | yes |
+| `sportscard-intelligence` | private | yes | yes | 403 (needs Pro) | yes (older) |
+| `kswiger-dev` | private | yes | **pending** | 403 (needs Pro) | yes |
+
+Three gaps are live as of the last survey:
+
+- **`cabin-management` and `gemini-pr-reviewer` are public and eligible, but have
+  no ruleset.** Nothing is blocking them — run the script against both.
+- **`cicd-automation` is private with no `main-push-guard.yml`.** It has neither
+  the ruleset (403) nor the fallback, so direct pushes to its `main` are
+  currently invisible.
+- **`kswiger-dev` has the workflows committed but no `CLAUDE_CODE_OAUTH_TOKEN`
+  secret and no Gemini webhook yet**, so the Claude job fails at auth and no
+  `gemini-pr-review` status is ever posted. Both are per-repo manual steps.
+
 ## What the ruleset enforces
 
 Scope is `~DEFAULT_BRANCH`, so it follows the default branch rather than hard-coding `main`.
@@ -88,6 +115,20 @@ guard: `main-push-guard.yml` (from `kyleswiger/aws-reusable-workflows`),
 which runs on every push to `main`, asks GitHub whether each pushed commit has an
 associated PR, and opens an issue plus fails the run when one does not. It makes
 a violation visible after the fact; it cannot prevent one.
+
+Two variants of the guard are in circulation, and the difference matters. The
+hardened one (currently in `jackscabin-mgmt` and `kswiger-dev`) additionally
+handles the two cases where the original silently passes:
+
+- **Force-push.** Rewinding `main` to an ancestor produces an empty `commits`
+  array, so the per-commit loop finds nothing to object to and reports a clean
+  bill of health for exactly the bypass the guard exists to catch. The hardened
+  version treats `github.event.forced` as a finding in its own right.
+- **The 20-commit payload cap.** The push event truncates `commits` at 20, so a
+  larger push hides everything past the twentieth. The hardened version asks the
+  compare API for the real range and falls back to the payload only if that 404s.
+
+`sportscard-intelligence` still carries the original — worth backporting.
 
 Pair it with a `.github/CODEOWNERS` file. Be aware that code owners is itself a
 paid feature on private repos — on the free plan the file is inert and only

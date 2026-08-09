@@ -88,7 +88,7 @@ resource "aws_cloudfront_function" "preview_router" {
   code    = <<-EOF
     function handler(event) {
       var request = event.request;
-      var host = request.headers.host ? request.headers.host.value : "";
+      var host = request.headers.host ? request.headers.host.value.toLowerCase() : "";
       var suffix = ".${var.preview_domain}";
 
       if (host.endsWith(suffix)) {

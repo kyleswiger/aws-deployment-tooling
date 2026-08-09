@@ -79,6 +79,7 @@ Previews are removed two ways, belt and braces:
 | `hosted_zone_id` | string | — | Route 53 zone that owns `preview_domain`. |
 | `price_class` | string | `PriceClass_100` | CloudFront price class. |
 | `expire_previews_after_days` | number | `14` | Backstop expiry for `previews/` objects; `0` disables. |
+| `extra_path_behaviors` | list(object) | `[]` | Extra path-pattern behaviors from other S3 buckets (e.g. an images bucket at `/segmented/*`); shared across previews, bypasses the host router. |
 | `preview_lambda_policy_statements` | list(object) | `[]` | Data-tier IAM statements for the shared preview Lambda execution role. |
 | `tags` | map(string) | `{}` | Tags for taggable resources. |
 

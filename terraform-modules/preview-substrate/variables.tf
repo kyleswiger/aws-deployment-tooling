@@ -52,6 +52,21 @@ variable "preview_lambda_policy_statements" {
   default = []
 }
 
+variable "extra_path_behaviors" {
+  description = <<-EOT
+    Additional path-pattern cache behaviors served from other S3 buckets via
+    this distribution's OAC — e.g. a processed-images bucket at /segmented/*.
+    These paths bypass the host→prefix router (they are shared across all
+    previews). Grant the distribution read access in each bucket's policy using
+    the cloudfront_distribution_arn output.
+  EOT
+  type = list(object({
+    path_pattern                = string
+    bucket_regional_domain_name = string
+  }))
+  default = []
+}
+
 variable "tags" {
   description = "Tags applied to taggable resources."
   type        = map(string)

@@ -124,6 +124,28 @@ resource "aws_cloudfront_distribution" "previews" {
     origin_access_control_id = aws_cloudfront_origin_access_control.previews.id
   }
 
+  dynamic "origin" {
+    for_each = { for i, b in var.extra_path_behaviors : i => b }
+    content {
+      domain_name              = origin.value.bucket_regional_domain_name
+      origin_id                = "s3-extra-${origin.key}"
+      origin_access_control_id = aws_cloudfront_origin_access_control.previews.id
+    }
+  }
+
+  dynamic "ordered_cache_behavior" {
+    for_each = { for i, b in var.extra_path_behaviors : i => b }
+    content {
+      path_pattern           = ordered_cache_behavior.value.path_pattern
+      target_origin_id       = "s3-extra-${ordered_cache_behavior.key}"
+      viewer_protocol_policy = "redirect-to-https"
+      allowed_methods        = ["GET", "HEAD"]
+      cached_methods         = ["GET", "HEAD"]
+      cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
+      compress               = true
+    }
+  }
+
   default_cache_behavior {
     target_origin_id       = "s3-previews"
     viewer_protocol_policy = "redirect-to-https"

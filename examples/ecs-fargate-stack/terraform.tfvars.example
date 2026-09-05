@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars and edit.
+
+name_prefix = "myapp"
+
+# owner/repo that GitHub Actions deploys from — this is the OIDC trust subject.
+github_repo = "kyleswiger/myapp"
+
+# --- Custom domain (optional) ---
+# Leave both unset for plain HTTP on the ALB DNS name (fine for a smoke test).
+# custom_domain  = "app.example.com"
+# hosted_zone_id = "Z0123456789ABCDEF"

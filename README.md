@@ -19,6 +19,7 @@ terraform-modules/   reusable, parameterized Terraform modules
   github-oidc-role/     keyless GitHub Actions IAM role (OIDC)
   lambda-zip/           zip-packaged Lambda + role + logs
   lambda-container/     image (ECR) Lambda + repo + role, optional VPC
+  ecs-fargate-service/  long-running container on Fargate + ALB + ACM (WebSockets/BEAM)
 
 templates/           copy-paste-and-fill CI/CD boilerplate
   buildspec/            CodeBuild buildspecs (app + runner image)
@@ -36,6 +37,7 @@ scripts/             automation
 examples/            complete, wired-together reference stacks
   lightweight-zip-stack/   SPA + Cognito + zip Lambda, profile-driven deploy.sh
   container-cicd-stack/    SPA + Cognito + container Lambda + GitHub OIDC CI
+  ecs-fargate-stack/       Fargate service + ALB + GitHub OIDC CI (long-running container)
 
 docs/                the methodology, in prose
   methodology.md · remote-state.md · github-oidc.md
@@ -62,6 +64,8 @@ packaged:
 - **Small handler?** `lambda-zip` + the profile-driven [`deploy.sh`](scripts/deploy.sh).
 - **Heavy/native deps, PR previews, multiple services?** `lambda-container` +
   change-aware [CodePipeline](docs/change-aware-ci.md).
+- **WebSockets or a persistent VM (Phoenix/BEAM)?** `ecs-fargate-service` —
+  one container behind an ALB; see [methodology](docs/methodology.md#long-running-containers).
 
 See the [methodology](docs/methodology.md) for the full decision guide.
 

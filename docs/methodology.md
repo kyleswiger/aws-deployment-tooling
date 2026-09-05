@@ -42,6 +42,20 @@ Every project built this way has the same shape:
 Pick the lightest one that fits. Reach for containers only when a zip can't hold
 the dependencies.
 
+### Long-running containers
+
+Lambda can't hold a WebSocket open or keep a BEAM/JVM alive between requests.
+For those, the toolkit's answer is
+[`ecs-fargate-service`](../terraform-modules/ecs-fargate-service): one
+container on Fargate behind an ALB with a regional ACM cert, deployed the same
+way as `lambda-container` — Terraform owns the shape, CI pushes the image,
+registers a task-definition revision, and calls `ecs update-service`. App
+Runner would have been simpler but is closed to new AWS customers since
+2026-04-30. Cost floor is ≈ $27–35/mo (0.25 vCPU task + ALB + public IPv4);
+the default network posture is the default VPC's public subnets with a public
+IP on the task — no NAT gateway, no VPC endpoints. See
+[`examples/ecs-fargate-stack`](../examples/ecs-fargate-stack).
+
 ## Two deployment drivers
 
 ### 1. Profile-driven `deploy.sh` (lightweight)
@@ -88,6 +102,8 @@ See [change-aware-ci.md](change-aware-ci.md) and
   (model on `cabin-management`).
 - **Backend with heavy deps, PR previews, multiple services** → container Lambda
   + CodePipeline (model on `sportscard-intelligence`).
+- **WebSockets / LiveView / anything that must stay resident** → `ecs-fargate-service`
+  + GitHub OIDC (`examples/ecs-fargate-stack`).
 
 Both use the same `static-site`, `cognito-user-pool`, `http-api-cognito`,
 `github-oidc-role`, and `bootstrap-state.sh` — only the Lambda module and

@@ -8,6 +8,7 @@ you can `init` / `plan` against your own account.
 |---|---|---|---|
 | [`lightweight-zip-stack`](lightweight-zip-stack) | `lambda-zip` | profile-driven [`deploy.sh`](../scripts/deploy.sh) | Small Node/Python handler, one service, solo or small team. |
 | [`container-cicd-stack`](container-cicd-stack) | `lambda-container` | change-aware [CI](../docs/change-aware-ci.md) + GitHub OIDC | Native/heavy deps, multiple services, PR previews. |
+| [`ecs-fargate-stack`](ecs-fargate-stack) | `ecs-fargate-service` | GitHub OIDC → ECR push + `ecs update-service` | WebSockets, persistent BEAM/JVM, long-lived connections. |
 
 Both stacks provision the same spine — a private-S3/CloudFront SPA, a Cognito
 JWT user pool, and an API Gateway v2 → Lambda backend. They differ only on the

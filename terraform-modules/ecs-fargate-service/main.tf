@@ -4,12 +4,12 @@
 # cert + Route 53 alias. Written with Phoenix/BEAM in mind (WebSockets, a
 # persistent VM) but nothing here is Elixir-specific.
 #
-# Deploy model: Terraform owns the *shape* — cluster, service, ALB, roles, and
-# the task definition's resources/env/secrets. CI owns the *running image*: it
-# pushes to ECR, registers a new task-definition revision with the built tag,
-# and calls `ecs update-service`. The service's task_definition is therefore
-# under ignore_changes (same idea as lambda-container's ignore_changes on
-# image_uri). The ci_policy_statements output grants exactly that.
+# Deploy model: Terraform owns infrastructure and a task-definition template;
+# CI owns the entire running task-definition revision, not just its image.
+# After a Terraform task-shape change, explicitly pass task_definition_arn to
+# CI as its template; cloning the running revision only updates the image.
+# The service ignores task_definition drift. See README for the handoff and
+# rollback contract.
 #
 # Network posture (deliberate, cheapest): the account's default VPC, its public
 # subnets, and a public IP on the task. See variables.tf `assign_public_ip`.
@@ -305,10 +305,10 @@ resource "aws_ecs_service" "this" {
     container_port   = var.container_port
   }
 
-  # CI registers new task-definition revisions with the built image and calls
-  # update-service; Terraform owns the shape, CI owns the running image (same
-  # model as lambda-container's ignore_changes on image_uri). desired_count is
-  # ignored so a manual scale-up/down isn't reverted by an unrelated apply.
+  # CI owns the entire running revision. Terraform template changes require an
+  # explicit task_definition_arn handoff to CI; a normal image-only deploy
+  # clones the running revision and will not adopt those changes.
+  # desired_count is ignored so an unrelated apply does not revert manual scale.
   lifecycle {
     ignore_changes = [task_definition, desired_count]
   }
@@ -393,6 +393,15 @@ resource "aws_lb" "this" {
   # so 60 would also work; 120 leaves slack for a paused tab.
   idle_timeout               = var.alb_idle_timeout
   enable_deletion_protection = false
+
+  # This resource always exists, including when a partial pair would otherwise
+  # disable all certificate/DNS resources and silently fall back to HTTP.
+  lifecycle {
+    precondition {
+      condition     = (var.custom_domain == "") == (var.hosted_zone_id == "")
+      error_message = "custom_domain and hosted_zone_id must both be set, or both be empty for plain HTTP."
+    }
+  }
 }
 
 resource "aws_lb_target_group" "this" {

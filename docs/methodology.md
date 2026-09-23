@@ -47,10 +47,16 @@ the dependencies.
 Lambda can't hold a WebSocket open or keep a BEAM/JVM alive between requests.
 For those, the toolkit's answer is
 [`ecs-fargate-service`](../terraform-modules/ecs-fargate-service): one
-container on Fargate behind an ALB with a regional ACM cert, deployed the same
-way as `lambda-container` — Terraform owns the shape, CI pushes the image,
-registers a task-definition revision, and calls `ecs update-service`. App
-Runner would have been simpler but is closed to new AWS customers since
+container on Fargate behind an ALB with a regional ACM cert,
+with Terraform owning infrastructure and a task-definition template. CI pushes
+the image, registers a task-definition revision, and calls `ecs update-service`.
+Unlike Lambda's image-only ignore, ECS ignores the entire running revision:
+Terraform task-shape changes need an explicit `task_definition_arn` handoff as
+the deploy workflow's `task-definition-arn` input. Empty input clones the running
+revision for image-only deployment; rollback always uses the actual pre-deploy
+service revision, not the Terraform template output. See the module's
+[ownership contract](../terraform-modules/ecs-fargate-service#adopting-task-definition-changes).
+App Runner would have been simpler but is closed to new AWS customers since
 2026-04-30. Cost floor is ≈ $27–35/mo (0.25 vCPU task + ALB + public IPv4);
 the default network posture is the default VPC's public subnets with a public
 IP on the task — no NAT gateway, no VPC endpoints. See
@@ -105,6 +111,6 @@ See [change-aware-ci.md](change-aware-ci.md) and
 - **WebSockets / LiveView / anything that must stay resident** → `ecs-fargate-service`
   + GitHub OIDC (`examples/ecs-fargate-stack`).
 
-Both use the same `static-site`, `cognito-user-pool`, `http-api-cognito`,
+The two Lambda paths use the same `static-site`, `cognito-user-pool`, `http-api-cognito`,
 `github-oidc-role`, and `bootstrap-state.sh` — only the Lambda module and
 deployment driver change.

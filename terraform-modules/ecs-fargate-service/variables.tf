@@ -4,13 +4,13 @@ variable "name_prefix" {
 }
 
 variable "custom_domain" {
-  description = "Domain to serve the app on (e.g. \"app.example.com\"). Empty = plain HTTP on the ALB DNS name, no certificate."
+  description = "Domain to serve the app on (e.g. \"app.example.com\"). Set together with hosted_zone_id, or leave both empty for plain HTTP on the ALB DNS name."
   type        = string
   default     = ""
 }
 
 variable "hosted_zone_id" {
-  description = "Route 53 hosted zone ID that owns custom_domain. Required only when custom_domain is set."
+  description = "Route 53 hosted zone ID that owns custom_domain. Set together with custom_domain, or leave both empty."
   type        = string
   default     = ""
 }

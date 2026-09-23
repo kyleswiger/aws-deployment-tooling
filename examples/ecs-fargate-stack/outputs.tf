@@ -23,6 +23,11 @@ output "task_definition_family" {
   value       = module.app.task_definition_family
 }
 
+output "task_definition_arn" {
+  description = "Terraform template revision; pass as CI task-definition-arn to adopt task-shape changes, not as the rollback target."
+  value       = module.app.task_definition_arn
+}
+
 output "container_name" {
   description = "Container name CI substitutes the new image into."
   value       = module.app.container_name

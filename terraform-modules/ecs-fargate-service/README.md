@@ -14,19 +14,49 @@ cheaper; see [docs/methodology.md](../../docs/methodology.md).
 
 ## Deploy model (important)
 
-Terraform owns the **shape**; CI owns the **running image**:
+Terraform owns **infrastructure and a task-definition template**; CI owns the
+**entire running task-definition revision**, not just its image:
 
 1. Terraform registers a task definition pointing at `<repo>:<image_tag>` and
    creates the cluster, service, ALB, roles, and log group.
 2. CI builds and pushes the image, renders a new task-definition revision with
-   the built tag (`aws ecs register-task-definition`), and calls
+   that image (`aws ecs register-task-definition`), and calls
    `aws ecs update-service`. The circuit breaker rolls back a revision whose
    tasks never become healthy.
 
 The service's `task_definition` (and `desired_count`) are under
 `ignore_changes`, so routine `terraform apply` runs never revert what CI just
-deployed — the same split as `lambda-container`'s `ignore_changes = [image_uri]`.
+deployed. Unlike Lambda's image-only ignore, this also prevents Terraform from
+updating the service's environment, secret references, CPU/memory, command, or
+roles through a new task definition. Terraform registers the new template, but
+**neither apply nor a normal image-only CI deploy adopts it automatically**.
 The `ci_policy_statements` output grants a CI role exactly those actions.
+
+### Adopting task-definition changes
+
+Use a reviewed, immutable version of `aws-reusable-workflows` that supports the
+optional `task-definition-arn` input on its reusable ECS deploy workflow:
+
+1. Review a fresh consumer Terraform plan and obtain approval before applying
+   task-template changes. Pin this module to the reviewed merged commit.
+2. After that approved apply, read `module.app.task_definition_arn` through a
+   root output (the ECS example exposes it). Pass that exact revision ARN as
+   the workflow's `task-definition-arn` input for the approved rollout. CI uses
+   that template, substitutes the new image in the named container, and
+   registers/deploys a revision preserving the template's other settings.
+3. An empty/omitted input retains image-only behavior: CI clones the service's
+   current task definition. It does not choose the family's latest revision.
+4. Before service mutation, CI must capture the **actual running service
+   revision** as the rollback target, even with an explicit template. The
+   Terraform output is a template, not evidence of what is currently running.
+   Verify steady state, `/healthz`, and application/WebSocket behavior after
+   rollout; restore that captured revision if rollback is needed.
+
+Do not reuse a stale explicit ARN unintentionally: leave the input empty for
+ordinary image-only deployments, or deliberately update the approved template
+ARN when adopting another infrastructure change. Task-definition rollback does
+not undo database migrations or other infrastructure changes; review those
+separately.
 
 ## Usage
 
@@ -115,7 +145,8 @@ tasks (and the circuit breaker trips) until CI pushes one and calls
   Set `custom_domain` + `hosted_zone_id` and the module issues a DNS-validated
   cert, waits for validation, attaches the 443 listener, redirects 80 → 443,
   and writes A + AAAA aliases. Leave both empty and the ALB serves plain HTTP on
-  its DNS name (`url` output) — useful for a first smoke test.
+  its DNS name (`url` output) — useful for a first smoke test. Setting only one
+  of these inputs fails the plan instead of silently falling back to HTTP.
 - **Cost floor.** 0.25 vCPU / 512 MiB on FARGATE_SPOT (~$3/mo) or on-demand
   (~$9/mo) + ALB (~$16/mo + LCU) + public IPv4 for task and ALB (~$7/mo)
   ≈ $27–35/mo. The ALB is the floor; if that's too much for a hobby app, a
@@ -145,8 +176,8 @@ tasks (and the circuit breaker trips) until CI pushes one and calls
 | Name | Type | Default | Description |
 |---|---|---|---|
 | `name_prefix` | string | — | Prefix for every resource; also the cluster/service/family name. |
-| `custom_domain` | string | `""` | Domain to serve on. Empty = plain HTTP on the ALB DNS name. |
-| `hosted_zone_id` | string | `""` | Route 53 zone owning `custom_domain`. Required with it. |
+| `custom_domain` | string | `""` | Domain to serve on. Set with `hosted_zone_id`, or leave both empty for HTTP. |
+| `hosted_zone_id` | string | `""` | Route 53 zone owning `custom_domain`. Set with it, or leave both empty. |
 | `create_ecr_repository` | bool | `true` | Create the repo vs. reuse `image_repository_url`. |
 | `ecr_repository_name` | string | `""` | Repo name; defaults to `<name_prefix>-repo`. |
 | `image_repository_url` | string | `""` | Existing repo URL when not creating one. |
@@ -186,3 +217,22 @@ list shaped for `github-oidc-role`'s `policy_statements` input granting ECR
 push, `RegisterTaskDefinition`, `UpdateService` on this service, `RunTask` on
 this family, `iam:PassRole` on both task roles, and `logs:GetLogEvents` on the
 log group.
+
+## Offline regression tests
+
+The module supports Terraform >= 1.5; its plan-only mocked-provider tests
+require Terraform >= 1.11 for `override_during = plan`. The fixtures live outside
+default test discovery so older Terraform versions can still initialize and
+validate the module. With Terraform >= 1.11, from this directory:
+
+```bash
+terraform init -backend=false
+terraform validate
+terraform test -test-directory=tests/offline
+```
+
+Every test run uses `command = plan` with a mocked AWS provider. The suite
+checks both valid domain modes, rejects each partial pair, and verifies the
+published task-template ARN and task settings without AWS credentials, cloud
+API calls, or applies. Workflow-side image substitution and rollback behavior
+are tested in `aws-reusable-workflows`, not by this module suite.

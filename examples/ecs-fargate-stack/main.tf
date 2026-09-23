@@ -1,10 +1,10 @@
 # ECS Fargate stack with GitHub OIDC CI
 # --------------------------------------
 # One long-running HTTP container (Phoenix/LiveView-shaped defaults) on Fargate
-# behind an ALB, plus a keyless GitHub Actions role. Terraform owns the shape;
-# CI owns the running image — it pushes to ECR, registers a task-definition
-# revision, and calls `ecs update-service`, so the service ignores
-# task_definition drift. See ../../docs/methodology.md "Long-running containers".
+# behind an ALB, plus a keyless GitHub Actions role. Terraform owns infrastructure
+# and a task-definition template; CI owns the entire running revision.
+# Terraform task-shape changes need an explicit task_definition_arn handoff to
+# CI. See README and ../../docs/methodology.md "Long-running containers".
 
 # 1. The service. Default VPC + public subnets + a public IP on the task: the
 #    cheapest posture (no NAT, no endpoints). FARGATE_SPOT is fine for a

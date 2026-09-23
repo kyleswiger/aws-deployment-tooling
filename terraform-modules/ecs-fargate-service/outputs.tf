@@ -24,7 +24,7 @@ output "task_definition_family" {
 }
 
 output "task_definition_arn" {
-  description = "ARN of the task-definition revision Terraform registered (CI moves the service past it)."
+  description = "Terraform-registered template revision. Pass as CI task-definition-arn to adopt task-shape changes; not the running revision or rollback target."
   value       = aws_ecs_task_definition.this.arn
 }
 

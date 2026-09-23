@@ -5,9 +5,10 @@ an ALB with TLS, plus a **keyless GitHub Actions role**. Reach for this when the
 app needs WebSockets, a persistent VM (Phoenix/BEAM, JVM), or connections that
 outlive a Lambda invocation.
 
-The dividing principle is the same as the Lambda examples: **Terraform owns
-infrastructure; CI owns code.** The service ignores `task_definition` drift, so
-`terraform apply` never fights the revision CI just deployed.
+**Terraform owns infrastructure and a task-definition template; CI owns the
+entire running revision.** The service ignores `task_definition` drift, so
+`terraform apply` never fights the revision CI just deployed, but also cannot
+roll out task-template changes by itself.
 
 ```
 Route53 ─► ALB (ACM TLS, :80→:443) ─► Fargate task ─► CloudWatch Logs   module.app
@@ -53,6 +54,29 @@ terraform output -raw github_actions_role_arn
 From then on, pushes to `main` build and push a new image, register a
 task-definition revision with it, and call `ecs update-service` — Terraform is
 only re-run when *infrastructure* changes.
+
+## Task-definition handoff
+
+After reviewing and applying a consumer plan that changes environment, secret
+references, CPU/memory, command, or task roles, read the root
+`task_definition_arn` output and pass it as the optional `task-definition-arn`
+input to a reviewed reusable ECS deploy workflow version that supports it:
+
+```bash
+terraform output -raw task_definition_arn
+```
+
+That ARN selects the Terraform template for the next CI rollout. CI substitutes
+the built image while preserving the template's other settings. Empty/omitted
+input keeps ordinary image-only deployments based on the running revision;
+such deployments **do not** adopt Terraform task-template changes.
+
+Rollback must use the actual service revision captured before the deploy, not
+this Terraform output. Verify steady state, `/healthz`, and WebSocket behavior
+after deployment. See the module's
+[ownership contract](../../terraform-modules/ecs-fargate-service#adopting-task-definition-changes)
+for the approval and rollback sequence. No workflow is installed by this
+example; wire and pin the consumer workflow separately.
 
 ## Notes
 

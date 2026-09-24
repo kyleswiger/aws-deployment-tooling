@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/kyleswiger/aws-deployment-tooling/compare/v1.0.0...v1.1.0) (2026-09-24)
+
+
+### Features
+
+* **ecs-fargate-service:** long-running container module + example stack ([#8](https://github.com/kyleswiger/aws-deployment-tooling/issues/8)) ([abe308e](https://github.com/kyleswiger/aws-deployment-tooling/commit/abe308e1248e4640e8b27cdb92854febe1d278eb))
+
 ## 1.0.0 (2026-08-13)
 
 
